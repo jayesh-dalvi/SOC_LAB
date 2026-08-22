@@ -1,85 +1,90 @@
-# SOC Home Lab
+# Troubleshooting: AD-Joined Workstation Unreachable via Computer Management
 
-A self-built Security Operations Center lab, simulating a small enterprise network with a domain controller, a SIEM server, a monitored client, and an attacker machine. Built to practice log collection, agent deployment, and basic attack/detection workflows.
+**Lab:** SOC_LAB (VirtualBox — Windows AD, Kali Linux, Ubuntu/Wazuh)
+**Environment:** `corp.local` domain — `DCG-DC01` (Domain Controller) managing `DCG-WS01` (Windows 10 workstation)
+**Date:** August 2026
 
-## Architecture
+## Summary
 
-![Network Topology](architecture/network.png)
+While attempting to manage `DCG-WS01` remotely from `DCG-DC01` using **Computer Management**, the connection failed with a firewall-related error. Investigation showed the real problem was not the firewall at all — it was a chain of three separate network misconfigurations that had to be diagnosed and fixed one at a time.
 
-Network: `192.168.100.0/24` | Domain: `corp.local`
+## The Initial Symptom
 
-| Machine | Role | IP | OS |
-|---|---|---|---|
-| DCG-DC01 | Domain Controller | 192.168.100.10 | Windows Server 2022 |
-| DCG-SOC01 | Wazuh SIEM server | 192.168.100.20 | Ubuntu |
-| DCG-WS01 | Workstation (domain-joined, Wazuh agent, Sysmon) | 192.168.100.30 | Windows 10 Enterprise |
-| DCG-ATTACK | Attacker machine | 192.168.100.40 | Kali Linux |
+Opening **Computer Management** on `DCG-DC01` and connecting to `DCG-WS01.corp.local` returned:
 
-All four VMs sit on the same internal network so the attacker box, endpoints, and SIEM can talk to each other exactly as they would in a real environment.
+> *"Computer DCG-WS01.corp.local cannot be managed. Verify that the network path is correct, the computer is available on the network, and that the appropriate Windows Firewall rules are enabled on the target computer."*
 
-## Windows Server / Active Directory
+The message pointed specifically at Windows Firewall (COM+ Network Access, Remote Event Log Management), which is a reasonable first guess — but turned out to be a red herring. Windows shows this same generic message even when the target machine is completely unreachable on the network.
 
-Built out a full AD structure on `corp.local`, with Organisational Units for each business function (Finance, HR, IT, Sales, SOC), matching security groups, and user accounts.
+## Diagnosis
 
-![Domain Controller network info](windows-server-ad/domain-controller-ipconfig.png)
+### Step 1 — Confirm basic connectivity
 
-**OU structure:**
+Before touching any firewall settings, a basic `ping` test was run from `DCG-DC01` to rule out (or confirm) a network-layer problem first:
 
-![OU structure](windows-server-ad/ou-structure.png)
+```powershell
+ping DCG-WS01.corp.local
+```
 
-**Security groups** (one global group per OU — Finance_Users_GG, HR_Users_GG, IT_Admins_GG, Sales_Users_GG, Soc_Analysts_GG):
+![Ping fails with Destination host unreachable](images/01-ping-fails-destination-unreachable.png)
 
-![Security groups](windows-server-ad/security-groups.png)
+DNS resolved the hostname to an IP (`192.168.100.30`), but every reply came back **"Destination host unreachable"** from the gateway itself — meaning there was no network route to the target at all. This confirmed the firewall message was misleading; the real issue was connectivity, not inbound rules.
 
-**User accounts** — example user provisioned under the SOC OU:
+### Step 2 — Check the VirtualBox network adapter
 
-![SOC OU user](windows-server-ad/soc-ou-user.png)
+With a routing-level failure confirmed, the next place to check was whether the VM's virtual NIC was even active. In VirtualBox Settings → Network for `DCG-WS01`, **"Enable Network Adapter" was unchecked** — the adapter was fully disabled at the hypervisor level, despite Windows still holding a static IP configuration internally.
 
-## Windows 10 Endpoint
+**Fix:** Ticked "Enable Network Adapter," saved settings, and power-cycled the VM (a running VM needs a restart for this change to take effect in VirtualBox).
 
-Domain-joined client running the Wazuh agent for log forwarding and Sysmon for detailed process/network telemetry.
+### Step 3 — Check DNS and IP configuration on the workstation
 
-![Workstation network info](windows-10/workstation-ipconfig.png)
+With the adapter enabled, the VM came back online — but running `ipconfig /all` on `DCG-WS01` revealed two further problems:
 
-**Sysmon logging in action** — a DNS query event (Event ID 22) captured on the workstation and forwarded through Windows Event Viewer:
+![DCG-WS01 wrong DNS server and DHCP-assigned IP](images/02-ws01-wrong-dns-and-dhcp-ip.png)
 
-![Sysmon DNS query event](windows-10/sysmon-dns-query-event.png)
+| Setting | Found | Should be |
+|---|---|---|
+| DNS Servers | `192.168.1.1` (generic router) | `192.168.100.10` (the DC) |
+| IPv4 Address | `192.168.100.4` (via DHCP) | `192.168.100.30` (matching the existing AD DNS record) |
 
-## Wazuh SIEM (Ubuntu)
+Pointing a domain-joined machine at the wrong DNS server breaks AD-integrated name resolution and SRV/Kerberos lookups. Separately, AD DNS still had `DCG-WS01` registered against its old IP (`192.168.100.30`), while DHCP had since handed the machine a different address (`192.168.100.4`) — a classic stale-record mismatch.
 
-Central server for log collection, correlation, and alerting. Confirmed the Wazuh manager service is active and both endpoints (workstation and domain controller) are connected as agents.
+**Fix (part 1) — correct the DNS server**, run as Administrator on `DCG-WS01`:
 
-**Server network configuration:**
+```powershell
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses 192.168.100.10
+```
 
-![SIEM server details](wazuh-siem-ubuntu/siem-server-details.png)
+> **Note:** This command requires an **elevated** PowerShell session. Running it as a standard user returns `Access to a CIM resource was not available to the client` (`PermissionDenied`, `CimException`).
 
-**Wazuh manager service status:**
+![DNS corrected to point at the DC](images/03-ws01-dns-corrected-to-dc.png)
 
-![Wazuh service status](wazuh-siem-ubuntu/wazuh-service-status.png)
+**Fix (part 2) — resolve the IP mismatch.** Rather than forcing AD DNS to update to the DHCP-assigned address, the workstation's IP was set statically to match the IP AD DNS already expected, giving `DCG-WS01` a stable, predictable address going forward:
 
-**Connected agents** — both endpoints reporting in as active:
+![Final correct static IP and DNS configuration](images/04-ws01-static-ip-set-matching-dns-record.png)
 
-![Agents connected](wazuh-siem-ubuntu/agents-connected.png)
+- IPv4 Address: `192.168.100.30` (static, DHCP disabled)
+- DNS Servers: `192.168.100.10` (the DC)
+- Default Gateway: `192.168.100.1`
 
-## Kali Linux (Attacker Machine)
+### Step 4 — Re-test
 
-Positioned on the same subnet as the rest of the lab. Confirmed connectivity to the domain controller, workstation, and SIEM server before running any simulated attacks against them.
+With all three issues resolved, the ping from `DCG-DC01` was re-run:
 
-![Kali connectivity test](kali-linux/network-connectivity-test.png)
+```powershell
+ping DCG-WS01.corp.local
+```
 
-## What this lab demonstrates
+![Ping succeeds with real replies](images/05-ping-succeeds-after-fix.png)
 
-- Standing up Active Directory from scratch: OUs, security groups, and users
-- Deploying and configuring a Wazuh SIEM, including agent enrollment
-- Configuring Sysmon for endpoint telemetry
-- Building a small isolated attack range and validating network reachability between all components
-- Troubleshooting real issues along the way: agent disconnections from manager IP misconfiguration in `ossec.conf`, Kerberos time-sync failures blocking domain join, and Sysmon event forwarding
+Real replies (`bytes=32 time<1ms TTL=128`, 0% loss) confirmed the workstation was fully reachable. Computer Management was then able to connect to `DCG-WS01` without any further firewall changes required.
 
-## Tools used
+## Root Causes (in order discovered)
 
-VirtualBox, Windows Server 2022, Windows 10, Ubuntu, Kali Linux, Wazuh, Sysmon, Active Directory, PowerShell
+1. **VirtualBox network adapter disabled** on the target VM — no network path existed at all, regardless of any OS-level configuration.
+2. **DNS server pointing at the wrong host** (a generic router address instead of the domain controller) — broke AD-integrated name resolution.
+3. **Stale AD DNS record vs. actual DHCP-assigned IP** — the hostname resolved to an IP the machine wasn't actually using.
 
----
+## Key Takeaway
 
-**Author:** Jayesh Dalvi
-[LinkedIn](https://www.linkedin.com/in/jayesh-dalvi-a114b079/) | [GitHub](https://github.com/jayesh-dalvi)
+The Windows Firewall error shown by Computer Management is generic and can appear even when the real problem is that the target machine is unreachable on the network. **Always verify basic connectivity (`ping`, `ipconfig /all`) before troubleshooting firewall rules** — working top-down from network reachability, to DNS resolution, to IP configuration, to firewall rules avoids chasing the wrong fix first. This mirrors a realistic diagnostic order a SOC analyst or IT support technician would follow for any "can't manage this remote host" ticket.

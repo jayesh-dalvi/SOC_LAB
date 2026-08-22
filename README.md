@@ -4,7 +4,7 @@ A self-built Security Operations Center lab, simulating a small enterprise netwo
 
 ## Architecture
 
-![Network Topology](architecture/network-topology.png)
+![Network Topology](architecture/network.png)
 
 Network: `192.168.100.0/24` | Domain: `corp.local`
 

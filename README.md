@@ -11,8 +11,8 @@ Network: `192.168.100.0/24` | Domain: `corp.local`
 | Machine | Role | IP | OS |
 |---|---|---|---|
 | DCG-DC01 | Domain Controller | 192.168.100.10 | Windows Server 2022 |
-| DCG-WS01 | Workstation (domain-joined, Wazuh agent, Sysmon) | 192.168.100.30 | Windows 10 Enterprise |
 | DCG-SOC01 | Wazuh SIEM server | 192.168.100.20 | Ubuntu |
+| DCG-WS01 | Workstation (domain-joined, Wazuh agent, Sysmon) | 192.168.100.30 | Windows 10 Enterprise |
 | DCG-ATTACK | Attacker machine | 192.168.100.40 | Kali Linux |
 
 All four VMs sit on the same internal network so the attacker box, endpoints, and SIEM can talk to each other exactly as they would in a real environment.

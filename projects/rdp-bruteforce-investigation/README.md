@@ -14,7 +14,7 @@ This investigation simulates a brute force attack against RDP (port 3389) on a W
 |---|---|---|
 | DCG-ATTACK | Kali Linux — attacker | 192.168.100.40 |
 | DCG-WKS01 | Windows 10 — target workstation | 192.168.100.30 |
-| DCG-SOC01 | Ubuntu — Wazuh manager/SIEM | 192.168.100.x |
+| DCG-SOC01 | Ubuntu — Wazuh manager/SIEM | 192.168.100.20 |
 
 **Target account:** a local test account (`socuser`) was created on DCG-WKS01 specifically for this exercise and added to the Remote Desktop Users group, so the attack didn't touch any real user credentials.
 

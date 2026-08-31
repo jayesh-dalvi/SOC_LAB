@@ -25,25 +25,25 @@ Built out a full AD structure on `corp.local`, with Organisational Units for eac
 
 **OU structure:**
 
-![OU structure](windows-server-ad/ou-structure.png)
+![OU structure](lab-setup/windows-server-ad/ou-structure.png)
 
 **Security groups** (one global group per OU — Finance_Users_GG, HR_Users_GG, IT_Admins_GG, Sales_Users_GG, Soc_Analysts_GG):
 
-![Security groups](windows-server-ad/security-groups.png)
+![Security groups](lab-setup/windows-server-ad/security-groups.png)
 
 **User accounts** — example user provisioned under the SOC OU:
 
-![SOC OU user](windows-server-ad/soc-ou-user.png)
+![SOC OU user](lab-setup/windows-server-ad/soc-ou-user.png)
 
 ## Windows 10 Endpoint
 
 Domain-joined client running the Wazuh agent for log forwarding and Sysmon for detailed process/network telemetry.
 
-![Workstation network info](windows-10/workstation-ipconfig.png)
+![Workstation network info](lab-setup/windows-10/workstation-ipconfig.png)
 
 **Sysmon logging in action** — a DNS query event (Event ID 22) captured on the workstation and forwarded through Windows Event Viewer:
 
-![Sysmon DNS query event](windows-10/sysmon-dns-query-event.png)
+![Sysmon DNS query event](lab-setup/windows-10/sysmon-dns-query-event.png)
 
 ## Wazuh SIEM (Ubuntu)
 
@@ -51,21 +51,21 @@ Central server for log collection, correlation, and alerting. Confirmed the Wazu
 
 **Server network configuration:**
 
-![SIEM server details](wazuh-siem-ubuntu/siem-server-details.png)
+![SIEM server details](lab-setup/wazuh-siem-ubuntu/siem-server-details.png)
 
 **Wazuh manager service status:**
 
-![Wazuh service status](wazuh-siem-ubuntu/wazuh-service-status.png)
+![Wazuh service status](lab-setup/wazuh-siem-ubuntu/wazuh-service-status.png)
 
 **Connected agents** — both endpoints reporting in as active:
 
-![Agents connected](wazuh-siem-ubuntu/agents-connected.png)
+![Agents connected](lab-setup/wazuh-siem-ubuntu/agents-connected.png)
 
 ## Kali Linux (Attacker Machine)
 
 Positioned on the same subnet as the rest of the lab. Confirmed connectivity to the domain controller, workstation, and SIEM server before running any simulated attacks against them.
 
-![Kali connectivity test](kali-linux/network-connectivity-test.png)
+![Kali connectivity test](lab-setup/kali-linux/network-connectivity-test.png)
 
 ## What this lab demonstrates
 

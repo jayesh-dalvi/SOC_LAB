@@ -21,7 +21,7 @@ All four VMs sit on the same internal network so the attacker box, endpoints, an
 
 Built out a full AD structure on `corp.local`, with Organisational Units for each business function (Finance, HR, IT, Sales, SOC), matching security groups, and user accounts.
 
-![Domain Controller network info](windows-server-ad/domain-controller-ipconfig.png)
+![Domain Controller network info](lab-setup/windows-server-ad/domain-controller-ipconfig.png)
 
 **OU structure:**
 
